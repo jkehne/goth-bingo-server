@@ -13,7 +13,10 @@ def new_client(client, server):
 
 # Called for every client disconnecting
 def client_left(client, server):
-        print("Client(%d) disconnected" % client['id'])
+        try:
+                print("Client(%d) disconnected" % client['id'])
+        except TypeError:
+                pass
 
 def handle_ping(client, server):
         print "ping received from client %d" % (client['id'])
