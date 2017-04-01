@@ -34,12 +34,12 @@ def handle_win(client, server, params):
         print "%s wins game %u" % (winner, current_game_id)
 
         current_game_id += 1
-        last_winner = winner
+        last_winner = winner[:100]
 
         for cli in server.clients:
                 if cli == client:
                         continue
-                server.send_message(cli, "WIN;%u;%s" % (current_game_id, winner.decode('utf-8')))
+                server.send_message(cli, "WIN;%u;%s" % (current_game_id, last_winner.decode('utf-8')))
 
 def handle_unknown_opcode(message):
         print "Opcode not recognized. Message was: %s" % message
