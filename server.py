@@ -39,7 +39,7 @@ def handle_win(client, server, params):
         for cli in server.clients:
                 if cli == client:
                         continue
-                server.send_message(cli, "WIN;%u;%s" % (current_game_id, winner.encode('utf-8')))
+                server.send_message(cli, "WIN;%u;%s" % (current_game_id, winner.decode('utf-8')))
 
 def handle_unknown_opcode(message):
         print "Opcode not recognized. Message was: %s" % message
