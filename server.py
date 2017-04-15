@@ -3,18 +3,20 @@
 from websocket_server import WebsocketServer
 
 current_game_id = 0
-last_winner = ""
+games = dict()
 
 # Called for every client connecting (after handshake)
 def new_client(client, server):
         global current_game_id
         print("New client connected and was given id %d" % client['id'])
-        server.send_message(client, "SIGNIN;%u;%s" % (current_game_id, last_winner))
 
 # Called for every client disconnecting
 def client_left(client, server):
         try:
-                print("Client(%d) disconnected" % client['id'])
+                client_id = client['id']
+                for game in games:
+                        game['players'].discard(client_id)
+                print("Client(%d) disconnected" % client_id)
         except TypeError:
                 pass
 
@@ -23,23 +25,57 @@ def handle_ping(client, server):
         server.send_message(client, "PONG")
         return
 
-def handle_win(client, server, params):
-        global current_game_id, last_winner
-        gameid, winner = params.split(";", 1)
+def find_client(server, player):
+        for cli in server.clients:
+                if cli['id'] == player:
+                        return cli
 
-        if int(gameid) != current_game_id:
-                print "Invalid game id %u (should be %u)" % (int(gameid), current_game_id)
+        raise IndexError
+
+def handle_win(client, server, params):
+        global current_game_id
+        groupname, gameid, winner = params.split(";", 2)
+
+        try:
+                game = games[groupname]
+        except(KeyError):
+                print "Invalid group name %s" % groupname
                 return
 
-        print "%s wins game %u" % (winner, current_game_id)
+        if int(gameid) != game['gameid']:
+                print "Invalid game id %u (should be %u)" % (int(gameid), game['gameid'])
+                return
+
+        print "Client %u (%s) wins game %u" % (client['id'], winner, game['gameid'])
 
         current_game_id += 1
-        last_winner = winner[:100]
+        game['gameid'] = current_game_id # TODO: Possible race condition. Shouldn't matter though
+        game['last_winner'] = winner[:100]
 
-        for cli in server.clients:
-                if cli == client:
+        disconnected_players = set()
+        for player in game['players']:
+                if player == client['id']:
+                        print "Ignoring client %u" % player
                         continue
-                server.send_message(cli, "WIN;%u;%s" % (current_game_id, last_winner.decode('utf-8')))
+                try:
+                        server.send_message(find_client(server, player), "WIN;%u;%s" % (game['gameid'], game['last_winner'].decode('utf-8')))
+                except(IndexError):
+                        print "Player %u appears to have disconnected, discarding" % player
+                        disconnected_players.add(player)
+
+        game['players'] -= disconnected_players
+
+def handle_signin(client, server, groupname):
+        try:
+                game = games[groupname]
+                print "Found group name %s for client %u" % (groupname, client['id'])
+        except(KeyError):
+                print "New group name %s for client %u" % (groupname, client['id'])
+                game = {"gameid": current_game_id, "last_winner": "", "players" : set()}
+                games[groupname] = game
+
+        game['players'].add(client['id'])
+        server.send_message(client, "SIGNIN;%u;%s" % (game['gameid'], game['last_winner']))
 
 def handle_unknown_opcode(message):
         print "Opcode not recognized. Message was: %s" % message
@@ -52,6 +88,8 @@ def message_received(client, server, message):
         opcode, params = message.split(";", 1)
         if opcode == "WIN":
                 handle_win(client, server, params)
+        elif opcode == "SIGNIN":
+                handle_signin(client, server, params)
         else:
                 handle_unknown_opcode(message)
 
