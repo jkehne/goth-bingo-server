@@ -32,29 +32,10 @@ def find_client(server, player):
 
         raise IndexError
 
-def handle_win(client, server, params):
-        global current_game_id
-        groupname, gameid, winner = params.split(";", 2)
-
-        try:
-                game = games[groupname]
-        except(KeyError):
-                print "Invalid group name %s" % groupname
-                return
-
-        if int(gameid) != game['gameid']:
-                print "Invalid game id %u (should be %u)" % (int(gameid), game['gameid'])
-                return
-
-        print "Client %u (%s) wins game %u" % (client['id'], winner, game['gameid'])
-
-        current_game_id += 1
-        game['gameid'] = current_game_id # TODO: Possible race condition. Shouldn't matter though
-        game['last_winner'] = winner[:100]
-
+def notify_players(server, game, winner):
         disconnected_players = set()
         for player in game['players']:
-                if player == client['id']:
+                if player == winner:
                         print "Ignoring client %u" % player
                         continue
                 try:
@@ -65,7 +46,43 @@ def handle_win(client, server, params):
 
         game['players'] -= disconnected_players
 
+def update_game_state(game, winner):
+        global current_game_id
+
+        current_game_id += 1
+        game['gameid'] = current_game_id # TODO: Possible race condition. Shouldn't matter though
+        game['last_winner'] = winner
+
+def find_game(groupname, expected_game_id):
+        try:
+                game = games[groupname]
+        except(KeyError):
+                print "Invalid group name %s" % groupname
+                raise
+
+        if expected_game_id != game['gameid']:
+                print "Invalid game id %u (should be %u)" % (int(gameid), game['gameid'])
+                raise KeyError
+
+        return game
+
+def handle_win(client, server, params):
+        groupname, gameid, winner = params.split(";", 2)
+
+        try:
+                game = find_game(groupname, int(gameid))
+        except(KeyError):
+                return
+
+        print "Client %u (%s) wins game %u" % (client['id'], winner, game['gameid'])
+
+        update_game_state(game, winner[:100])
+
+        notify_players(server, game, client['id'])
+
 def handle_signin(client, server, groupname):
+        global current_game_id
+
         try:
                 game = games[groupname]
                 print "Found group name %s for client %u" % (groupname, client['id'])
