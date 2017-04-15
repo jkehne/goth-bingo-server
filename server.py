@@ -1,9 +1,29 @@
 #!/usr/bin/env python
 
 from websocket_server import WebsocketServer
+import os, pwd, grp
 
 current_game_id = 0
 games = dict()
+
+def drop_privileges(uid_name='nobody', gid_name='nogroup'):
+        if os.getuid() != 0:
+        # We're not root so, like, whatever dude
+                return
+
+        # Get the uid/gid from the name
+        running_uid = pwd.getpwnam(uid_name).pw_uid
+        running_gid = grp.getgrnam(gid_name).gr_gid
+
+        # Remove group privileges
+        os.setgroups([])
+
+        # Try setting the new uid/gid
+        os.setgid(running_gid)
+        os.setuid(running_uid)
+
+        # Ensure a very conservative umask
+        old_umask = os.umask(077)
 
 # Called for every client connecting (after handshake)
 def new_client(client, server):
@@ -113,6 +133,7 @@ def message_received(client, server, message):
 
 # def main():
 PORT=9001
+drop_privileges()
 server = WebsocketServer(PORT)
 server.set_fn_new_client(new_client)
 server.set_fn_client_left(client_left)
