@@ -35,7 +35,10 @@ def client_left(client, server):
         try:
                 client_id = client['id']
                 for game in games:
+                        num_players = len(game['players'])
                         game['players'].discard(client_id)
+                        if (len(game['players']) != num_players):
+                                notify_num_players(server, game)
                 print("Client(%d) disconnected" % client_id)
         except TypeError:
                 pass
@@ -51,6 +54,21 @@ def find_client(server, player):
                         return cli
 
         raise IndexError
+
+def notify_num_players(server, game):
+        retry = True
+        while retry:
+                retry = False
+                disconnected_players = set()
+                for player in game['players']:
+                        try:
+                                server.send_message(find_client(server, player), "PLAYERS;%u" % (len(game['players'])))
+                        except(IndexError):
+                                print "Player %u appears to have disconnected, discarding" % player
+                                disconnected_players.add(player)
+                                retry = True
+
+                game['players'] -= disconnected_players
 
 def notify_players(server, game, winner):
         disconnected_players = set()
@@ -113,6 +131,7 @@ def handle_signin(client, server, groupname):
 
         game['players'].add(client['id'])
         server.send_message(client, "SIGNIN;%u;%s" % (game['gameid'], game['last_winner']))
+        notify_num_players(server, game)
 
 def handle_unknown_opcode(message):
         print "Opcode not recognized. Message was: %s" % message
