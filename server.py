@@ -60,6 +60,8 @@ async def notify_players(websocket, game):
                         disconnected_players.add(player)
 
         game['players'] -= disconnected_players
+        if len(disconnected_players) > 0:
+                notify_num_players(websocket, game)
 
 def update_game_state(game, winner):
         global current_game_id
