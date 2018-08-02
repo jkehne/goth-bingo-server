@@ -136,7 +136,9 @@ async def client_loop(websocket, path):
                 while True:
                         message = await websocket.recv()
                         await message_received(websocket, message)
-        except(websockets.exceptions.ConnectionClosed):
+        except websockets.exceptions.ConnectionClosed:
+                pass
+        finally:
                 await client_left(websocket)
 
 # def main():
