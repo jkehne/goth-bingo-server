@@ -37,15 +37,13 @@ async def notify_num_players(websocket, game):
 
 # Called for every client disconnecting
 async def client_left(websocket):
-        try:
-                for game in games:
-                        num_players = len(game['players'])
-                        game['players'].discard(websocket)
-                        if (len(game['players']) != num_players):
-                                print("Client left from game %s" % game['gameid'])
-                                await notify_num_players(websocket, game)
-        except TypeError:
-                pass
+        global games
+        for game in games:
+                num_players = len(games[game]['players'])
+                games[game]['players'].discard(websocket)
+                if (len(games[game]['players']) != num_players):
+                        print("Client left from game %s" % game)
+                        await notify_num_players(websocket, games[game])
 
 async def handle_ping(websocket):
         await websocket.send("PONG")
