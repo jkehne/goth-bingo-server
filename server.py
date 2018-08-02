@@ -21,9 +21,6 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
         os.setgid(running_gid)
         os.setuid(running_uid)
 
-        # Ensure a very conservative umask
-        #old_umask = os.umask(077)
-
 async def notify_num_players(websocket, game):
         retry = True
         while retry:
