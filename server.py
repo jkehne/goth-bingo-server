@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 
-import os, pwd, grp, asyncio, websockets
+import os, pwd, grp, asyncio, websockets, logging
 
+# logging setup
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+formatter = logging.Formatter('[%(levelname)s] %(message)s')
+ch.setFormatter(formatter)
+
+log.addHandler(ch)
+
+# globals
 current_game_id = 0
 games = dict()
 
@@ -9,6 +22,8 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
         if os.getuid() != 0:
         # We're not root so, like, whatever dude
                 return
+
+        log.debug("Running as root, dropping privileges")
 
         # Get the uid/gid from the name
         running_uid = pwd.getpwnam(uid_name).pw_uid
@@ -28,8 +43,10 @@ async def notify_num_players(websocket, game):
                 disconnected_players = set()
                 for player in game['players']:
                         try:
+                                log.debug("Sending number of players")
                                 await player.send("PLAYERS;%u" % (len(game['players'])))
                         except(websockets.exceptions.ConnectionClosed):
+                                log.debug("Sending failed, disconnecting player")
                                 disconnected_players.add(player)
                                 retry = True
 
@@ -42,7 +59,7 @@ async def client_left(websocket):
                 num_players = len(games[game]['players'])
                 games[game]['players'].discard(websocket)
                 if (len(games[game]['players']) != num_players):
-                        print("Client left from game %s" % game)
+                        log.info("Client left from game %s", game)
                         await notify_num_players(websocket, games[game])
 
 async def handle_ping(websocket):
@@ -55,12 +72,15 @@ async def notify_players(websocket, game):
                 if player == websocket:
                         continue
                 try:
+                        log.debug("Sending win notification")
                         await player.send("WIN;%u;%s" % (game['gameid'], game['last_winner']))
                 except(websockets.exceptions.ConnectionClosed):
+                        log.debug("Sending falied, disconnecting player")
                         disconnected_players.add(player)
 
         game['players'] -= disconnected_players
         if len(disconnected_players) > 0:
+                log.debug("Sending some win notifications failed, updating number of players")
                 notify_num_players(websocket, game)
 
 def update_game_state(game, winner):
@@ -74,11 +94,11 @@ def find_game(groupname, expected_game_id):
         try:
                 game = games[groupname]
         except(KeyError):
-                print("Invalid group name %s" % groupname)
+                log.error("Invalid group name %s", groupname)
                 raise
 
         if expected_game_id != game['gameid']:
-                print("Invalid game id %u (should be %u)" % (int(gameid), game['gameid']))
+                log.error("Invalid game id %u (should be %u)", int(gameid), game['gameid'])
                 raise KeyError
 
         return game
@@ -91,7 +111,7 @@ async def handle_win(websocket, params):
         except(KeyError):
                 return
 
-        print("Client %s wins game %u" % (winner, game['gameid']))
+        log.info("Client %s wins game %u of group %s", winner, game['gameid'], groupname)
 
         update_game_state(game, winner[:100])
 
@@ -100,13 +120,13 @@ async def handle_win(websocket, params):
 async def handle_signin(websocket, groupname):
         global current_game_id
 
-        print ("Signin to game id %s" % groupname)
+        log.info("Signin to game id %s", groupname)
 
         try:
                 game = games[groupname]
-                print("Found group name %s" % (groupname))
+                log.debug("Found group name %s", groupname)
         except(KeyError):
-                print("New group name %s" % (groupname))
+                log.debug("New group name %s", groupname)
                 game = {"gameid": current_game_id, "last_winner": "", "players" : set()}
                 games[groupname] = game
 
@@ -115,7 +135,7 @@ async def handle_signin(websocket, groupname):
         await notify_num_players(websocket, game)
 
 def handle_unknown_opcode(message):
-        print("Opcode not recognized. Message was: %s" % message)
+        log.error("Opcode not recognized. Message was: %s", message)
 
 # Called when a client sends a message
 async def message_received(websocket, message):
@@ -131,7 +151,7 @@ async def message_received(websocket, message):
                 handle_unknown_opcode(message)
 
 async def client_loop(websocket, path):
-        print("Client connected")
+        log.info("Client connected")
         try:
                 while True:
                         message = await websocket.recv()
